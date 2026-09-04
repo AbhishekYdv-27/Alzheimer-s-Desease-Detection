@@ -1,0 +1,41 @@
+{
+  "models": {
+    "ResNet50_1.0": {
+      "model_name": "ResNet50",
+      "model_version": "1.0",
+      "architecture": "ResNet50",
+      "num_classes": 4,
+      "class_names": [
+        "NonDemented",
+        "VeryMildDemented",
+        "MildDemented",
+        "ModerateDemented"
+      ],
+      "model_path": "C:\\Users\\abhis\\OneDrive\\Desktop\\CODING\\COLLEGE PROJECT\\Alzheimer's Desease Detection\\backend\\models\\resnet50_best.pth",
+      "training_status": "TRAINED",
+      "experiment_id": "resnet50_colab_2024",
+      "created_date": "2024-01-15T00:00:00",
+      "updated_date": "2024-01-15T00:00:00",
+      "metrics": {
+        "test_accuracy": 95.52,
+        "val_accuracy": 94.8
+      },
+      "notes": "Trained on Google Colab with PyTorch. Test accuracy: 95.52%",
+      "config": {
+        "pretrained": false,
+        "freeze_backbone": false,
+        "dropout_rate": 0.3,
+        "input_size": [
+          224,
+          224
+        ]
+      },
+      "input_size": [
+        224,
+        224
+      ],
+      "input_channels": 3
+    }
+  },
+  "last_updated": "2024-01-15T00:00:00"
+}

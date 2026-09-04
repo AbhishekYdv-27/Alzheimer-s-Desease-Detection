@@ -1,0 +1,90 @@
+# Python virtual environment
+.venv/
+
+# Python cache
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+
+# Logs and test cache
+*.log
+/.pytest_cache/
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+
+# Python build files
+dist/
+build/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/tsconfig.tsbuildinfo
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
+
+# Large datasets
+data/raw/
+data/processed/
+data/splits/
+
+# Trained model binaries
+/models/*.pth
+/models/*.pt
+/models/*.onnx
+
+/backend/models/*.pth
+/backend/models/*.pt
+/backend/models/*.onnx
+
+# Local development/debug/verification scripts
+/api_test.py
+/comprehensive_test.py
+/debug_*.py
+/final_test.py
+/final_verification.py
+/fix_registry.py
+/part*_verification.py
+/quick_test.py
+/simple_test.py
+/test_*.py
+/verify.py
+/verify_final.py
+/verify_phase1.py
+
+# Generated application data
+backend/results/
+data/app.db
+
+# Python virtual environment
+.venv/
+
+# Environment files
+.env
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Frontend dependencies/build
+frontend/node_modules/
+frontend/dist/
