@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Optional, Tuple, Dict, Any
 import torch
 import torch.nn as nn
+from collections.abc import Mapping
+import logging
 
 from backend.app.ml.models import (
     ResNet50Architecture,
@@ -18,6 +20,7 @@ from backend.app.ml.models import (
 from backend.app.ml.registry import ModelRegistry, ModelStatus, ALZHEIMER_CLASSES
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -61,11 +64,22 @@ class ModelLoader:
                 result.error_message = f"No model path specified for {model_name}"
                 return result
 
-            checkpoint = torch.load(meta.model_path, map_location=device, weights_only=False)
-            if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
+            model_path = self.registry.resolve_model_path(meta)
+            checkpoint = torch.load(model_path, map_location=device, weights_only=True)
+            if isinstance(checkpoint, Mapping) and "model_state_dict" in checkpoint:
                 state_dict = checkpoint["model_state_dict"]
             else:
                 state_dict = checkpoint
+
+            if not isinstance(state_dict, Mapping) or not all(
+                isinstance(key, str) and isinstance(value, torch.Tensor)
+                for key, value in state_dict.items()
+            ):
+                raise ValueError("Checkpoint does not contain a tensor state dictionary")
+
+            checkpoint_classes = checkpoint.get("class_names") if isinstance(checkpoint, Mapping) else None
+            if checkpoint_classes is not None and list(checkpoint_classes) != meta.class_names:
+                raise ValueError("Checkpoint class labels do not match the model registry")
 
             backbone_state_dict = {}
             for key, value in state_dict.items():
@@ -74,10 +88,7 @@ class ModelLoader:
                 else:
                     backbone_state_dict[key] = value
 
-            try:
-                model.backbone.load_state_dict(backbone_state_dict, strict=True)
-            except RuntimeError:
-                model.backbone.load_state_dict(backbone_state_dict, strict=False)
+            model.backbone.load_state_dict(backbone_state_dict, strict=True)
 
             model = model.to(device)
             model.eval()
@@ -88,11 +99,12 @@ class ModelLoader:
 
         except FileNotFoundError:
             result.error_code = "MODEL_FILE_NOT_FOUND"
-            result.error_message = f"Model file not found: {meta.model_path}"
+            result.error_message = "Configured model checkpoint was not found"
             return result
-        except Exception as e:
+        except Exception:
+            logger.exception("Configured model checkpoint could not be loaded")
             result.error_code = "MODEL_LOAD_FAILED"
-            result.error_message = f"Failed to load model: {str(e)}"
+            result.error_message = "Configured model checkpoint could not be loaded"
             return result
 
     def _create_model_architecture(self, architecture: str, config: Dict[str, Any]) -> nn.Module:
@@ -149,9 +161,17 @@ class ModelLoader:
         if not meta.model_path:
             return False, "MODEL_PATH_MISSING"
 
-        model_file = Path(meta.model_path)
+        model_file = self.registry.resolve_model_path(meta)
         if not model_file.exists():
             return False, "MODEL_FILE_NOT_FOUND"
+        try:
+            from backend.app.ml.registry.model_registry import ModelRegistry
+
+            valid, status, _ = ModelRegistry().validate_model_file(model_name, model_version)
+            if not valid:
+                return False, status
+        except OSError:
+            return False, "MODEL_FILE_UNREADABLE"
 
         return True, "AVAILABLE"
 

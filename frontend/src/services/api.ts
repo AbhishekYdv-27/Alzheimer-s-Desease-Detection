@@ -1,8 +1,36 @@
-import { ModelInfo, ModelStatus, AnalysisRecord } from '@/types'
+import {
+  AnalysisRecord,
+  DoctorProfile,
+  ModelComparison,
+  ModelInfo,
+  ModelReadiness,
+  ModelStatus,
+  PatientProgress,
+} from '@/types'
 
-const API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '')
+const configuredApiUrl = import.meta.env.VITE_API_URL?.trim()
+if (import.meta.env.PROD) {
+  if (!configuredApiUrl) {
+    throw new Error('VITE_API_URL must be set to the deployed HTTPS API base URL')
+  }
+  let parsedApiUrl: URL
+  try {
+    parsedApiUrl = new URL(configuredApiUrl)
+  } catch {
+    throw new Error('VITE_API_URL must be an absolute HTTPS API base URL')
+  }
+  if (
+    parsedApiUrl.protocol !== 'https:'
+    || ['localhost', '127.0.0.1', '::1'].includes(parsedApiUrl.hostname)
+    || !parsedApiUrl.pathname.replace(/\/$/, '').endsWith('/api')
+  ) {
+    throw new Error('VITE_API_URL must use HTTPS and end with /api')
+  }
+}
 
-async function fetchWithAuth(url: string, options: RequestInit = {}) {
+const API_BASE = (configuredApiUrl || '/api').replace(/\/$/, '')
+
+export async function fetchWithAuth(url: string, options: RequestInit = {}) {
   const token = localStorage.getItem('token')
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
@@ -46,7 +74,7 @@ export const authApi = {
 
 // Models API
 export const modelsApi = {
-  getAll: (): Promise<ModelInfo[]> => fetchWithAuth('/models'),
+  getAll: (): Promise<ModelInfo[]> => fetchWithAuth('/models/'),
 
   getByName: (name: string): Promise<ModelInfo> =>
     fetchWithAuth(`/models/${name}`),
@@ -54,10 +82,10 @@ export const modelsApi = {
   getStatus: (): Promise<{ models: ModelStatus[] }> =>
     fetchWithAuth('/models/status'),
 
-  getReadiness: (name: string, version?: string): Promise<any> =>
+  getReadiness: (name: string, version?: string): Promise<ModelReadiness> =>
     fetchWithAuth(`/models/${name}/readiness${version ? `?model_version=${version}` : ''}`),
 
-  compare: (): Promise<any> => fetchWithAuth('/models/compare/'),
+  compare: (): Promise<ModelComparison> => fetchWithAuth('/models/compare/'),
 }
 
 // Analysis API
@@ -107,7 +135,7 @@ export const analysisApi = {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error_message: 'Prediction failed' }))
-      throw new Error(error.error_message || 'Prediction failed')
+      throw new Error(error.error_message || error.detail || 'Prediction failed')
     }
     return response.json()
   },
@@ -130,9 +158,27 @@ export const analysisApi = {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error_message: 'Explanation failed' }))
-      throw new Error(error.error_message || 'Explanation failed')
+      throw new Error(error.error_message || error.detail || 'Explanation failed')
     }
-    return response.json()
+    const result = await response.json()
+    const apiOrigin = new URL(API_BASE, window.location.origin).origin
+    const loadPrivateAsset = async (path: string | null): Promise<Blob | null> => {
+      if (!path) return null
+      const assetResponse = await fetch(new URL(path, apiOrigin).toString(), {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      if (!assetResponse.ok) throw new Error('Failed to load explanation image')
+      return assetResponse.blob()
+    }
+    const [heatmap, overlay] = await Promise.all([
+      loadPrivateAsset(result.heatmap_url),
+      loadPrivateAsset(result.overlay_url),
+    ])
+    return {
+      ...result,
+      heatmap_url: heatmap ? URL.createObjectURL(heatmap) : null,
+      overlay_url: overlay ? URL.createObjectURL(overlay) : null,
+    }
   },
 
   downloadReport: async (recordId: string) => {
@@ -152,20 +198,20 @@ export const portalApi = {
   doctors: (city = '', specialization = '') => fetchWithAuth(`/portal/doctors?city=${encodeURIComponent(city)}&specialization=${encodeURIComponent(specialization)}`),
   availability: (doctorId: string, date = '') => fetchWithAuth(`/portal/doctors/${doctorId}/availability${date ? `?date=${encodeURIComponent(date)}` : ''}`),
   createAvailability: (data: { date: string; start_time: string; end_time: string; interval_minutes: number }) => fetchWithAuth('/portal/doctor/availability', { method: 'POST', body: JSON.stringify(data) }),
-  doctorProfile: () => fetchWithAuth('/portal/doctor/profile'),
-  saveDoctorProfile: (profile: Record<string, unknown>) => fetchWithAuth('/portal/doctor/profile', { method: 'PUT', body: JSON.stringify(profile) }),
+  doctorProfile: (): Promise<DoctorProfile> => fetchWithAuth('/portal/doctor/profile'),
+  saveDoctorProfile: (profile: DoctorProfile) => fetchWithAuth('/portal/doctor/profile', { method: 'PUT', body: JSON.stringify(profile) }),
   bookAppointment: (doctor_id: string, appointment_at: string, reason: string, slot_id?: string) => fetchWithAuth('/portal/appointments', { method: 'POST', body: JSON.stringify({ doctor_id, appointment_at, slot_id, reason }) }),
   myAppointments: () => fetchWithAuth('/portal/appointments/me'),
   doctorAppointments: () => fetchWithAuth('/portal/doctor/appointments'),
   doctorPatients: () => fetchWithAuth('/portal/doctor/patients'),
   createDoctorNote: (patient_id: string, content: string, follow_up: string) => fetchWithAuth('/portal/doctor/notes', { method: 'POST', body: JSON.stringify({ patient_id, content, follow_up }) }),
   updateAppointment: (id: string, status: string) => fetchWithAuth(`/portal/appointments/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
-  progress: () => fetchWithAuth('/portal/progress'),
+  progress: (): Promise<PatientProgress> => fetchWithAuth('/portal/progress'),
   notifications: () => fetchWithAuth('/portal/notifications'),
   markNotificationRead: (id: string) => fetchWithAuth(`/portal/notifications/${id}/read`, { method: 'PATCH' }),
 }
 
 // Health API
 export const healthApi = {
-  check: (): Promise<{ status: string }> => fetch(`${API_BASE}/health`).then(res => res.json()),
+  check: (): Promise<{ status: string }> => fetch(`${API_BASE}/health/`).then(res => res.json()),
 }

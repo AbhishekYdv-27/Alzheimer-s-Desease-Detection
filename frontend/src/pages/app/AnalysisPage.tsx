@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { analysisApi, portalApi } from '@/services/api'
-import { useAuth } from '@/context/AuthContext'
+import { analysisApi, modelsApi, portalApi } from '@/services/api'
+import { useAuth } from '@/context/useAuth'
 import { ModelInfo } from '@/types'
 import { Upload, Image, X, Loader2, Brain, AlertCircle, CheckCircle, BarChart3 } from 'lucide-react'
 
@@ -34,9 +34,14 @@ export default function AnalysisPage() {
   useEffect(() => {
     const loadModels = async () => {
       try {
-        const modelResponse = await fetch('/api/models')
-        const modelsData = await modelResponse.json()
-        setModels(modelsData)
+        const [modelsData, statusData] = await Promise.all([
+          modelsApi.getAll(),
+          modelsApi.getStatus(),
+        ])
+        const availableNames = new Set(
+          statusData.models.filter((model) => model.available).map((model) => model.model_name),
+        )
+        setModels(modelsData.filter((model) => availableNames.has(model.model_name)))
       } catch (err) {
         console.error('Failed to load models:', err)
       }
@@ -109,9 +114,13 @@ export default function AnalysisPage() {
 
     try {
       const predictionResult = await analysisApi.predict(image, selectedModel)
+      if (predictionResult.error_code) {
+        setError(predictionResult.error_message || 'Analysis failed')
+        return
+      }
       setResult(predictionResult)
 
-      if (user && predictionResult.predicted_class && !predictionResult.error_code && (user.role !== 'doctor' || selectedPatientId)) {
+      if (user && predictionResult.predicted_class && (user.role !== 'doctor' || selectedPatientId)) {
         try {
           await analysisApi.saveRecord({
             user_id: user.role === 'doctor' ? selectedPatientId : user.id,
@@ -135,8 +144,7 @@ export default function AnalysisPage() {
     }
   }
 
-  const trainedModels = models.filter((m) => m.training_status === 'TRAINED')
-  const isModelReady = trainedModels.some((m) => m.model_name === selectedModel)
+  const isModelReady = models.some((m) => m.model_name === selectedModel)
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -166,8 +174,8 @@ export default function AnalysisPage() {
         </p>
 
         <div className="mt-4 grid gap-3 md:grid-cols-3">
-          {trainedModels.length > 0 ? (
-            trainedModels.map((model) => (
+          {models.length > 0 ? (
+            models.map((model) => (
               <button
                 key={model.model_name}
                 onClick={() => setSelectedModel(model.model_name)}
@@ -192,12 +200,12 @@ export default function AnalysisPage() {
           ) : (
             <div className="col-span-3 flex items-center gap-2 rounded-lg bg-orange-500/10 px-4 py-3 text-sm text-orange-600">
               <AlertCircle className="h-4 w-4" />
-              No trained models available
+              No inference-ready models available
             </div>
           )}
         </div>
 
-        {trainedModels.length > 0 && (
+        {models.length > 0 && (
           <div className="mt-4 rounded-lg bg-green-500/10 px-4 py-3 text-sm text-green-600">
             Model ready for inference
           </div>
@@ -297,7 +305,7 @@ export default function AnalysisPage() {
             <div>
               <h2 className="text-lg font-semibold">Prediction: {result.predicted_class}</h2>
               <p className="text-sm text-muted-foreground">
-                Confidence: {(result.confidence * 100).toFixed(2)}% | Model: {result.model_name} v{result.model_version}
+                Top-class softmax score: {(result.confidence * 100).toFixed(2)}% (uncalibrated) | Model: {result.model_name} v{result.model_version}
               </p>
             </div>
           </div>
@@ -307,7 +315,7 @@ export default function AnalysisPage() {
             <div className="mt-6">
               <h3 className="flex items-center gap-2 font-semibold">
                 <BarChart3 className="h-5 w-5 text-primary" />
-                Class Probabilities
+                Softmax Scores (Not Calibrated)
               </h3>
               <div className="mt-4 space-y-3">
                 {Object.entries(result.class_probabilities).map(([cls, prob]) => (

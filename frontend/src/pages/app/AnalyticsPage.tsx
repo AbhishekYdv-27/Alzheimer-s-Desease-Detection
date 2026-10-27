@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useAuth } from '@/context/AuthContext'
+import { useAuth } from '@/context/useAuth'
 import { analysisApi } from '@/services/api'
 import { BarChart3, PieChart, TrendingUp, Brain, Scan } from 'lucide-react'
 
@@ -49,7 +49,7 @@ export default function AnalyticsPage() {
       <div>
         <h1 className="text-2xl font-bold">Analytics</h1>
         <p className="mt-1 text-muted-foreground">
-          Visualize model performance and research metrics
+          Review your analysis history and research outputs
         </p>
       </div>
 
@@ -74,8 +74,9 @@ export default function AnalyticsPage() {
                 <Brain className="h-5 w-5 text-green-500" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Avg Confidence</p>
+                <p className="text-sm text-muted-foreground">Avg Top-Class Score</p>
                 <p className="text-2xl font-bold">{(stats.average_confidence * 100).toFixed(1)}%</p>
+                <p className="text-xs text-muted-foreground">Uncalibrated model output</p>
               </div>
             </div>
           </div>
@@ -123,25 +124,18 @@ export default function AnalyticsPage() {
         </div>
       )}
 
-      {/* Real Model Metrics */}
+      {/* Model Evaluation Status */}
       <div className="rounded-xl border border-border/40 bg-card p-6">
         <div className="flex items-center gap-2">
           <TrendingUp className="h-5 w-5 text-primary" />
-          <h3 className="font-semibold">Model Performance</h3>
+          <h3 className="font-semibold">Model Evaluation Status</h3>
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
-          Real metrics from trained models
+          Verified performance metrics are unavailable because the configured MRI dataset folders contain no image samples.
         </p>
-        <div className="mt-6 grid grid-cols-2 gap-4">
-          <div className="rounded-lg bg-secondary/30 p-4">
-            <p className="text-xs text-muted-foreground">ResNet50 Test Accuracy</p>
-            <p className="text-xl font-bold text-green-600">95.52%</p>
-          </div>
-          <div className="rounded-lg bg-secondary/30 p-4">
-            <p className="text-xs text-muted-foreground">ResNet50 Validation Accuracy</p>
-            <p className="text-xl font-bold text-green-600">94.80%</p>
-          </div>
-        </div>
+        <p className="mt-4 text-sm text-muted-foreground">
+          Registry metadata has not been independently validated. Do not interpret it as evidence of clinical accuracy or diagnostic performance.
+        </p>
       </div>
 
       {/* Empty State */}

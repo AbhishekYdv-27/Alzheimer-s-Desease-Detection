@@ -5,13 +5,20 @@ import { Brain, AlertCircle, Clock } from 'lucide-react'
 
 export default function ModelsPage() {
   const [models, setModels] = useState<ModelInfo[]>([])
+  const [availability, setAvailability] = useState<Record<string, boolean>>({})
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     const loadModels = async () => {
       try {
-        const data = await modelsApi.getAll()
+        const [data, statusData] = await Promise.all([
+          modelsApi.getAll(),
+          modelsApi.getStatus(),
+        ])
         setModels(data)
+        setAvailability(Object.fromEntries(
+          statusData.models.map((model) => [model.model_name, model.available]),
+        ))
       } catch (error) {
         console.error('Failed to load models:', error)
       } finally {
@@ -59,12 +66,12 @@ export default function ModelsPage() {
                 </div>
                 <span
                   className={`rounded-full px-3 py-1 text-xs font-medium ${
-                    model.training_status === 'TRAINED'
+                    availability[model.model_name]
                       ? 'bg-green-500/10 text-green-600'
                       : 'bg-orange-500/10 text-orange-600'
                   }`}
                 >
-                  {model.training_status}
+                  {availability[model.model_name] ? 'Checkpoint ready' : 'Unavailable'}
                 </span>
               </div>
 
@@ -86,6 +93,12 @@ export default function ModelsPage() {
                   <span className="text-muted-foreground">Experiment ID</span>
                   <span className="font-medium">
                     {model.experiment_id || 'N/A'}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Training provenance</span>
+                  <span className="font-medium">
+                    {model.training_status === 'UNVERIFIED' ? 'Not verified' : model.training_status}
                   </span>
                 </div>
               </div>
@@ -111,7 +124,7 @@ export default function ModelsPage() {
               {Object.keys(model.metrics).length > 0 && (
                 <div className="mt-4 border-t border-border/40 pt-4">
                   <p className="text-xs font-medium text-muted-foreground">
-                    Metrics
+                    Registered metrics (unverified)
                   </p>
                   <div className="mt-2 grid grid-cols-2 gap-2">
                     {Object.entries(model.metrics).slice(0, 4).map(([key, value]) => (
@@ -142,9 +155,9 @@ export default function ModelsPage() {
       {/* Disclaimer */}
       <div className="rounded-lg border border-orange-500/30 bg-orange-500/10 p-4">
         <p className="text-xs text-orange-600 dark:text-orange-400">
-          <strong>Research note:</strong> Availability and metrics are shown from the
-          registered model metadata. ResNet50 is available for the current MRI workflow;
-          other architectures may remain research infrastructure only.
+          <strong>Research note:</strong> Checkpoint availability is checked at runtime.
+          Registered metrics have not been independently validated and are not clinical
+          performance claims. Other architectures may remain research infrastructure only.
         </p>
       </div>
     </div>

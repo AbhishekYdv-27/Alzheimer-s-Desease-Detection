@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { useAuth } from '@/context/AuthContext'
-import { useTheme } from '@/context/ThemeContext'
+import { useAuth } from '@/context/useAuth'
+import { useTheme } from '@/context/useTheme'
 import { authApi } from '@/services/api'
 import { User, Palette, Lock, Sun, Moon, Monitor, Loader2 } from 'lucide-react'
 

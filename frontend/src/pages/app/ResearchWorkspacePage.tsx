@@ -69,9 +69,9 @@ export default function ResearchWorkspacePage() {
 
         <div className="mt-6 space-y-3">
           {[
-            { name: 'ResNet50 Training', status: 'Not Started' },
-            { name: 'Swin Transformer Training', status: 'Not Started' },
-            { name: 'Ensemble Experiment', status: 'Not Started' },
+            { name: 'ResNet50 provenance review', status: 'Not verified' },
+            { name: 'Swin Transformer training', status: 'Not configured' },
+            { name: 'Ensemble experiment', status: 'Not configured' },
           ].map((exp) => (
             <div
               key={exp.name}
@@ -89,8 +89,9 @@ export default function ResearchWorkspacePage() {
       {/* Disclaimer */}
       <div className="rounded-lg border border-orange-500/30 bg-orange-500/10 p-4">
         <p className="text-xs text-orange-600 dark:text-orange-400">
-          <strong>Note:</strong> Experiments require trained models. Current models
-          are implemented but not yet trained.
+          <strong>Note:</strong> The local ResNet50 checkpoint loads for a synthetic
+          software smoke test, but its provenance and training history are unverified.
+          No real-MRI evaluation has been run.
         </p>
       </div>
     </div>

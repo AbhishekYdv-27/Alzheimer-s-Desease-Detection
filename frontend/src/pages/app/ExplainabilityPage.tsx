@@ -1,6 +1,6 @@
-import { useState, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { AlertCircle, Image as ImageIcon, Info, Upload, Loader2, CheckCircle } from 'lucide-react'
-import { analysisApi } from '@/services/api'
+import { analysisApi, modelsApi } from '@/services/api'
 
 interface ExplainResult {
   success: boolean
@@ -22,7 +22,21 @@ export default function ExplainabilityPage() {
   const [result, setResult] = useState<ExplainResult | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [modelAvailable, setModelAvailable] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    modelsApi.getStatus()
+      .then(({ models }) => setModelAvailable(
+        models.some((model) => model.model_name === 'ResNet50' && model.available),
+      ))
+      .catch(() => setModelAvailable(false))
+  }, [])
+
+  useEffect(() => () => {
+    if (result?.heatmap_url) URL.revokeObjectURL(result.heatmap_url)
+    if (result?.overlay_url) URL.revokeObjectURL(result.overlay_url)
+  }, [result])
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -57,6 +71,11 @@ export default function ExplainabilityPage() {
 
     try {
       const response = await analysisApi.explain(selectedFile, 'ResNet50', '1.0')
+      if (!response.success) {
+        setError(response.error_message || 'Explanation failed')
+        setResult(null)
+        return
+      }
       setResult(response)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Explanation failed')
@@ -171,7 +190,7 @@ export default function ExplainabilityPage() {
               <div>
                 <h2 className="text-lg font-semibold">Prediction: {result.predicted_class}</h2>
                 <p className="text-sm text-muted-foreground">
-                  Confidence: {(result.confidence * 100).toFixed(2)}% | Model: {result.model_name} v{result.model_version}
+                  Top-class softmax score: {(result.confidence * 100).toFixed(2)}% (uncalibrated) | Model: {result.model_name} v{result.model_version}
                 </p>
               </div>
             </div>
@@ -235,24 +254,16 @@ export default function ExplainabilityPage() {
         </>
       )}
 
-      {/* Supported Models */}
+      {/* Configured Model */}
       <div className="rounded-xl border border-border/40 bg-card p-6">
-        <h3 className="font-semibold">Supported Models</h3>
+        <h3 className="font-semibold">Configured Model</h3>
         <div className="mt-4 space-y-3">
-          {[
-            { name: 'ResNet50', status: 'Active' },
-            { name: 'Swin Transformer', status: 'Compatible' },
-          ].map((model) => (
-            <div
-              key={model.name}
-              className="flex items-center justify-between rounded-lg border border-border/40 bg-secondary/30 p-3"
-            >
-              <span className="font-medium">{model.name}</span>
-              <span className="rounded bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-600">
-                {model.status}
-              </span>
-            </div>
-          ))}
+          <div className="flex items-center justify-between rounded-lg border border-border/40 bg-secondary/30 p-3">
+            <span className="font-medium">ResNet50</span>
+            <span className={`rounded px-2 py-0.5 text-xs font-medium ${modelAvailable ? 'bg-green-500/10 text-green-600' : 'bg-orange-500/10 text-orange-600'}`}>
+              {modelAvailable ? 'Checkpoint ready' : 'Unavailable'}
+            </span>
+          </div>
         </div>
       </div>
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useAuth } from '@/context/AuthContext'
+import { useAuth } from '@/context/useAuth'
 import { analysisApi } from '@/services/api'
 import { AnalysisRecord } from '@/types'
 import { Search, Filter, FolderOpen, Brain, Clock, AlertCircle } from 'lucide-react'

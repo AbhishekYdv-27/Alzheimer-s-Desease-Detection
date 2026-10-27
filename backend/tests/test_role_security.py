@@ -4,6 +4,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.app.core.database import get_db
+from backend.app.core.auth import create_access_token
+from backend.app.core.doctor_provisioning import provision_verified_doctor
 from backend.app.main import app
 
 
@@ -18,7 +20,7 @@ def users():
     suffix = uuid.uuid4().hex
     accounts = [
         {"name": "Pytest Patient", "email": f"patient-{suffix}@example.com", "password": "patient123", "role": "patient"},
-        {"name": "Pytest Doctor", "email": f"doctor-{suffix}@example.com", "password": "doctor123", "role": "doctor"},
+        {"name": "Pytest Doctor", "email": f"doctor-{suffix}@example.com", "password": "test-doctor-password-123", "role": "doctor"},
     ]
     created = []
     yield accounts, created
@@ -38,9 +40,22 @@ def users():
 
 
 def register(client, account, created):
-    response = client.post("/api/auth/register", json=account)
-    assert response.status_code == 200
-    data = response.json()
+    if account["role"] == "doctor":
+        user = provision_verified_doctor(
+            name=account["name"],
+            email=account["email"],
+            password=account["password"],
+            provisioned_by="pytest",
+            verification_method="test fixture",
+        )
+        data = {"user": user, "access_token": create_access_token({"sub": user["id"]})}
+    else:
+        response = client.post(
+            "/api/auth/register",
+            json={key: account[key] for key in ("name", "email", "password")},
+        )
+        assert response.status_code == 200
+        data = response.json()
     assert data["user"]["role"] == account["role"]
     created.append(data["user"]["id"])
     return data

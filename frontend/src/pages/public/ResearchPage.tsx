@@ -29,7 +29,7 @@ export default function ResearchPage() {
               {
                 step: '2',
                 title: 'Model Analysis',
-                description: 'Apply trained AI models to identify patterns associated with different stages of cognitive decline.',
+                description: 'Inspect configured model outputs. Checkpoint provenance and diagnostic performance have not been independently verified.',
               },
               {
                 step: '3',
@@ -38,13 +38,13 @@ export default function ResearchPage() {
               },
               {
                 step: '4',
-                title: 'Uncertainty Quantification',
-                description: 'Evaluate prediction confidence through Monte Carlo Dropout and ensemble methods.',
+                title: 'Confidence Output Limitations',
+                description: 'Confidence values are model softmax outputs and have not been calibrated as uncertainty estimates.',
               },
               {
                 step: '5',
                 title: 'Model Evaluation',
-                description: 'Assess model performance using comprehensive metrics including calibration analysis.',
+                description: 'Use authorized labeled data and a reproducible holdout protocol; no evaluation metrics are currently established.',
               },
             ].map((item) => (
               <div
@@ -95,8 +95,8 @@ export default function ResearchPage() {
               <div>
                 <h3 className="font-medium">Transparency</h3>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  All model decisions are explained through interpretability methods
-                  to support explainable AI research.
+                  Grad-CAM visualizations are available for supported model analyses;
+                  they are not clinical explanations or evidence of diagnostic validity.
                 </p>
               </div>
             </div>

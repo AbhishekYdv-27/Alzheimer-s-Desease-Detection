@@ -2,61 +2,50 @@
 
 ## Production boundary
 
-This application is a research and education platform, not a certified medical device. Do not use predictions or Grad-CAM visualizations as a diagnosis.
+This is a research and education platform, not a certified medical device. Do not use predictions or Grad-CAM visualizations as a diagnosis. The repository has no authorized labeled MRI samples, and no clinical performance has been established.
 
-## Environment
+## Vercel + Render
 
-Copy `.env.example` to `.env` and set a unique secret:
+The intended deployment pairing is Vercel for the Vite frontend and Render for the FastAPI backend. Follow the detailed [Vercel + Render runbook](./DEPLOYMENT_RUNBOOK_VERCEL_RENDER.md), configure values from [DEPLOYMENT_ENVIRONMENT_VARIABLES.md](./DEPLOYMENT_ENVIRONMENT_VARIABLES.md), and resolve the items in [DEPLOYMENT_BLOCKERS.md](./DEPLOYMENT_BLOCKERS.md) before a public launch.
+
+The backend blueprint is `render.yaml`; its health check uses `/health`. The frontend's `frontend/vercel.json` preserves client-side routes. Vercel production builds require `VITE_API_URL` to be an absolute HTTPS URL ending in `/api`. Render's `CORS_ORIGINS` must contain the exact frontend origin.
+
+## Backend configuration and storage
+
+Production requires:
+
+- `APP_ENV=production`
+- A unique `SECRET_KEY` of at least 32 unpredictable characters
+- Explicit HTTPS `CORS_ORIGINS`
+- An absolute `ALZHEIMERS_DB_PATH` on persistent storage
+- A provisioned checkpoint path in `MODEL_CHECKPOINT_PATH` if model inference is required
+- `DEBUG=false`
+
+The active adapter is SQLite. `DATABASE_URL` is not used to select PostgreSQL; a PostgreSQL adapter and migrations do not currently exist. Render's blueprint intentionally leaves the disk path and checkpoint path for dashboard configuration; it does not attach a disk or implement checkpoint downloading. The local checkpoint is ignored by Git, so it is not included in a normal deployment.
+
+The local backend command is:
 
 ```powershell
-Copy-Item .env.example .env
+.\.venv\Scripts\python.exe run_backend.py
 ```
 
-Required production values:
+`run_backend.py` reads `HOST` and `PORT` through the shared settings, allowing local defaults (`127.0.0.1:8001`) and the hosting provider's bind values.
 
-- `SECRET_KEY`: long random value, never commit it.
-- `CORS_ORIGINS`: comma-separated HTTPS frontend origins only.
-- `HOST` and `PORT`: bind values supplied by the hosting provider.
-- `DATABASE_URL`: use managed PostgreSQL with a compatible database adapter before multi-worker production use. The current SQLite adapter is for local and single-process deployments.
-- `DEBUG`: keep `false` in production.
-
-## Backend
-
-Install dependencies, then run a process manager or hosting provider command equivalent to:
-
-```powershell
-uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
-```
-
-Expose `/health` and `/api/predict/health` as health checks. Use HTTPS termination, restricted network access to the database, log redaction, backups, and a managed secrets store.
-
-The backend emits structured request, startup, shutdown, and unhandled-error logs through Python logging. Do not log request bodies, passwords, bearer tokens, uploaded images, or raw medical data. Configure the hosting provider to retain logs and alert on 5xx responses.
-
-### Render
-
-The repository includes `render.yaml`. Create the service from that blueprint, set `CORS_ORIGINS` to the deployed frontend origin, and configure persistent storage or a managed database for any data that must survive redeploys.
-
-### Railway
-
-Create a Python service from the repository with build command `pip install -r requirements.txt` and start command `uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT`. Set the same environment variables in Railway and attach a managed database only after the PostgreSQL adapter and migrations are implemented.
-
-## Frontend
+## Frontend build
 
 ```powershell
 Set-Location frontend
 npm.cmd ci
 npm.cmd run build
-npm.cmd run preview -- --host 0.0.0.0
+npm.cmd run lint
 ```
 
-Configure the reverse proxy so `/api` routes to the backend and the frontend origin is included in `CORS_ORIGINS`.
+The production API base is a build-time Vite variable. Do not place secrets in `VITE_*` values. For local development, Vite proxies `/api` to `http://127.0.0.1:8001`.
 
-For a separately hosted backend, set `VITE_API_URL=https://your-api.example.com/api` in the frontend build environment. The Vercel configuration in `frontend/vercel.json` preserves client-side routes. If frontend and backend share a reverse proxy, leave `VITE_API_URL=/api`.
+## Operations and data safety
 
-## Database
+Before accepting sensitive images, define access, consent, retention/deletion, backup, and recovery policies. Configure HTTPS, secrets management, log retention/redaction, request-size limits, monitoring, and alerting. No production backup/restore drill or hosted resource-capacity test has been performed.
 
-`init_db()` creates missing local tables and adds compatible columns for the SQLite development database. Production deployments need versioned migrations, backups, and a PostgreSQL adapter before switching away from the local SQLite file.
+## Dataset validation
 
-## MRI validation
-
-Run `py -3 scripts/validate_mri_dataset.py` before evaluating the model. The command exits non-zero if any of the four class directories lacks real image samples. Never use synthetic or unrelated images as clinical validation evidence.
+Run `py -3 scripts/validate_mri_dataset.py` before evaluating the model. The command exits non-zero if any of the four class directories lacks real image samples. Never use synthetic or unrelated images as clinical validation evidence. A successful local synthetic inference smoke test is not model evaluation.

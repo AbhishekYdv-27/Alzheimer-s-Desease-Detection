@@ -88,3 +88,32 @@ __pycache__/
 # Frontend dependencies/build
 frontend/node_modules/
 frontend/dist/
+
+# Thesis and academic report artifacts
+/thesis_drafts/
+/thesis_output/
+/scripts/build_thesis.py
+/scripts/generate_diagrams.py
+/scripts/generate_thesis_pdf.py
+/scripts/thesis_content.py
+
+# Local secrets
+.env
+.env.*
+!.env.example
+
+# Thesis files — do not upload to GitHub
+/thesis_drafts/
+/thesis_output/
+/scripts/build_thesis.py
+/scripts/generate_diagrams.py
+/scripts/generate_thesis_pdf.py
+/scripts/thesis_content.py
+
+# Thesis files - exclude from GitHub
+/thesis_drafts/
+/thesis_output/
+/scripts/build_thesis.py
+/scripts/generate_diagrams.py
+/scripts/generate_thesis_pdf.py
+/scripts/thesis_content.py

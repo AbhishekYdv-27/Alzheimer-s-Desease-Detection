@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
+import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 import torch
@@ -19,6 +20,7 @@ from backend.app.ml.preprocessing import (
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
+logger = logging.getLogger(__name__)
 
 
 class PredictionError(Exception):
@@ -132,7 +134,7 @@ class InferenceService:
         return None
 
     def predict(self, request: PredictionRequest) -> PredictionResponse:
-        timestamp = datetime.now().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
 
         ready, status, msg = check_model_ready(request.model_name, request.model_version)
         if not ready:
@@ -210,7 +212,8 @@ class InferenceService:
                 timestamp=timestamp
             )
 
-        except Exception as e:
+        except Exception:
+            logger.exception("Model inference failed")
             return PredictionResponse(
                 predicted_class="",
                 predicted_class_index=-1,
@@ -218,7 +221,7 @@ class InferenceService:
                 model_version=request.model_version,
                 timestamp=timestamp,
                 error_code=ErrorCode.PREDICTION_FAILED,
-                error_message=f"Prediction failed: {str(e)}"
+                error_message="Prediction failed. Check server logs for details."
             )
 
     def predict_batch(
@@ -265,11 +268,12 @@ def create_prediction_readiness_report(model_name: str, model_version: str = "1.
             all_passed = False
 
     if meta and meta.model_path:
-        file_exists = Path(meta.model_path).exists()
+        model_path = registry.resolve_model_path(meta)
+        file_exists = model_path.exists()
         checks.append({
             "check": "Model file exists",
             "passed": file_exists,
-            "message": f"File: {meta.model_path}"
+            "message": "Configured model checkpoint is available" if file_exists else "Configured model checkpoint is missing"
         })
         if not file_exists:
             all_passed = False

@@ -6,23 +6,20 @@ const technologies = [
     items: [
       {
         name: 'ResNet50',
-        description: 'Deep residual network for image classification with 50 layers.',
-        status: 'IMPLEMENTED',
-        trained: false,
+        description: 'Configured four-output classifier. Checkpoint availability depends on the deployment artifact.',
+        status: 'CONFIGURED',
         classes: 4,
       },
       {
         name: 'Swin Transformer',
-        description: 'Hierarchical vision transformer with shifted windows.',
-        status: 'IMPLEMENTED',
-        trained: false,
+        description: 'Architecture code only; not part of the active configured inference path.',
+        status: 'RESEARCH CODE',
         classes: 4,
       },
       {
         name: 'U-Net',
-        description: 'Encoder-decoder architecture for segmentation research.',
-        status: 'IMPLEMENTED',
-        trained: false,
+        description: 'Experimental segmentation architecture; no trained checkpoint or active segmentation path is verified.',
+        status: 'EXPERIMENTAL',
         purpose: 'Experimental',
       },
     ],
@@ -32,9 +29,8 @@ const technologies = [
     items: [
       {
         name: 'Grad-CAM',
-        description: 'Gradient-weighted Class Activation Mapping for CNN visualizations.',
-        status: 'IMPLEMENTED',
-        compatible: ['ResNet50', 'Swin Transformer'],
+        description: 'Implemented and smoke-tested with the configured ResNet50 checkpoint on synthetic input; hosted availability is unverified.',
+        status: 'LOCAL SMOKE TEST',
       },
     ],
   },
@@ -43,13 +39,13 @@ const technologies = [
     items: [
       {
         name: 'MC Dropout',
-        description: 'Monte Carlo Dropout for uncertainty quantification.',
-        status: 'IMPLEMENTED',
+        description: 'Research code exists; this is not used by the active prediction endpoint.',
+        status: 'NOT ACTIVE',
       },
       {
         name: 'Ensemble Methods',
-        description: 'Multi-model ensemble for improved reliability.',
-        status: 'READY',
+        description: 'No ensemble inference or reliability evaluation is verified.',
+        status: 'NOT VERIFIED',
       },
     ],
   },
@@ -58,13 +54,13 @@ const technologies = [
     items: [
       {
         name: 'Temperature Scaling',
-        description: 'Post-training calibration for probability estimates.',
-        status: 'IMPLEMENTED',
+        description: 'Calibration has not been verified on labeled data.',
+        status: 'NOT VERIFIED',
       },
       {
         name: 'ECE/MCE',
-        description: 'Expected and Maximum Calibration Error metrics.',
-        status: 'IMPLEMENTED',
+        description: 'No labeled test dataset is available to produce calibration metrics.',
+        status: 'NOT VERIFIED',
       },
     ],
   },
@@ -106,7 +102,7 @@ export default function TechnologyPage() {
                       <h3 className="font-medium">{item.name}</h3>
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                          item.status === 'IMPLEMENTED'
+                          item.status === 'CONFIGURED' || item.status === 'LOCAL SMOKE TEST'
                             ? 'bg-primary/10 text-primary'
                             : 'bg-secondary text-muted-foreground'
                         }`}
@@ -118,19 +114,6 @@ export default function TechnologyPage() {
                     <p className="mt-2 text-sm text-muted-foreground">
                       {item.description}
                     </p>
-
-                    {'trained' in item && (
-                      <div className="mt-3 flex items-center gap-2 text-xs">
-                        <span
-                          className={`flex h-2 w-2 rounded-full ${
-                            item.trained ? 'bg-green-500' : 'bg-orange-500'
-                          }`}
-                        />
-                        <span className="text-muted-foreground">
-                          {item.trained ? 'Trained' : 'NOT TRAINED'}
-                        </span>
-                      </div>
-                    )}
 
                     {'classes' in item && (
                       <div className="mt-3 text-xs text-muted-foreground">
@@ -182,9 +165,11 @@ export default function TechnologyPage() {
         {/* Note */}
         <div className="mt-8 rounded-lg border border-orange-500/30 bg-orange-500/10 p-4">
           <p className="text-sm text-orange-600 dark:text-orange-400">
-            <strong>Note:</strong> While the model architectures are fully implemented,
-            they have not been trained on a dataset yet. Predictions will become available
-            once trained models are integrated into the platform.
+            <strong>Research limitation:</strong> The active local inference path is a
+            four-output ResNet50 classifier. A local checkpoint is present but is not
+            included in the Git deployment tree. No authorized labeled MRI dataset is
+            bundled, so model performance and clinical validity have not been established.
+            U-Net segmentation and CLAHE are not part of the verified inference path.
           </p>
         </div>
       </div>

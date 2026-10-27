@@ -3,9 +3,13 @@ services:
     name: alzheimers-ai-api
     runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
+    startCommand: python run_backend.py
     healthCheckPath: /health
     envVars:
+      - key: APP_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
       - key: SECRET_KEY
         generateValue: true
       - key: JWT_ALGORITHM
@@ -14,5 +18,13 @@ services:
         value: "1440"
       - key: CORS_ORIGINS
         sync: false
-      - key: DATABASE_URL
+      - key: ALZHEIMERS_DB_PATH
+        sync: false
+      - key: MODEL_CHECKPOINT_PATH
+        sync: false
+      - key: MODEL_CHECKPOINT_SHA256
+        sync: false
+      - key: MODEL_ARTIFACT_URL
+        sync: false
+      - key: MODEL_ARTIFACT_TOKEN
         sync: false

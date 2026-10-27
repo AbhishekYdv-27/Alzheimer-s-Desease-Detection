@@ -1,16 +1,31 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 import hashlib
 import hmac
 import base64
 import secrets
-import os
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from backend.app.core.config import settings
 
-SECRET_KEY = os.getenv("SECRET_KEY") or secrets.token_urlsafe(32)
-ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", str(60 * 24)))
+# Keep a stable development key unless a real secret is configured. Using a
+# randomly generated value every process start invalidates JWTs after restarts.
+DEFAULT_SECRET_KEY = "dev-secret-key-change-me-in-production"
+APP_ENV = settings.app_env.strip().lower()
+IS_PRODUCTION = APP_ENV in {"production", "prod"}
+configured_secret = settings.secret_key.strip() if settings.secret_key else None
+
+if IS_PRODUCTION and (
+    not configured_secret
+    or configured_secret == DEFAULT_SECRET_KEY
+    or configured_secret.lower() in {"replace-with-a-long-random-secret", "change-me"}
+    or len(configured_secret) < 32
+):
+    raise RuntimeError("Production requires a SECRET_KEY of at least 32 characters")
+
+SECRET_KEY = configured_secret or DEFAULT_SECRET_KEY
+ALGORITHM = settings.jwt_algorithm
+ACCESS_TOKEN_EXPIRE_MINUTES = settings.access_token_expire_minutes
 
 security = HTTPBearer()
 
@@ -36,9 +51,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt

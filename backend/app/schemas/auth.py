@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from typing import Optional
 from datetime import datetime
 
@@ -9,8 +9,8 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
-    password: str
-    role: str = "patient"
+    password: str = Field(min_length=6)
+    model_config = ConfigDict(extra="forbid")
 
 
 class UserLogin(BaseModel):
@@ -28,13 +28,12 @@ class PasswordUpdate(BaseModel):
 
 
 class UserResponse(UserBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     created_at: datetime
     updated_at: datetime
     role: str = "patient"
-
-    class Config:
-        from_attributes = True
 
 
 class TokenResponse(BaseModel):

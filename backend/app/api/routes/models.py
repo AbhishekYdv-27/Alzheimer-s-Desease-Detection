@@ -52,36 +52,44 @@ class ReadinessReport(BaseModel):
 def list_models():
     registry = get_registry()
     models = registry.get_all_models()
-    return [
-        ModelInfo(
-            model_name=m.model_name,
-            model_version=m.model_version,
-            architecture=m.architecture,
-            num_classes=m.num_classes,
-            class_names=m.class_names,
-            training_status=m.training_status,
-            model_path=m.model_path if m.model_path else None,
-            experiment_id=m.experiment_id if m.experiment_id else None,
-            metrics=m.metrics
+    items = []
+    for model in models:
+        available, status, _ = registry.validate_model_file(
+            model.model_name,
+            model.model_version,
         )
-        for m in models
-    ]
+        items.append(ModelInfo(
+            model_name=model.model_name,
+            model_version=model.model_version,
+            architecture=model.architecture,
+            num_classes=model.num_classes,
+            class_names=model.class_names,
+            training_status=model.training_status if available else status,
+            model_path=None,
+            experiment_id=model.experiment_id if model.experiment_id else None,
+            metrics=model.metrics,
+        ))
+    return items
 
 
 @router.get("/status")
 def get_all_statuses():
     registry = get_registry()
     models = registry.get_all_models()
+    from backend.app.ml.models.model_loader import check_model_ready
+
+    statuses = []
+    for model in models:
+        ready, status, message = check_model_ready(model.model_name, model.model_version)
+        statuses.append({
+            "model_name": model.model_name,
+            "model_version": model.model_version,
+            "status": status,
+            "available": ready,
+            "message": message,
+        })
     return {
-        "models": [
-            {
-                "model_name": m.model_name,
-                "model_version": m.model_version,
-                "status": m.training_status,
-                "available": m.training_status == "TRAINED"
-            }
-            for m in models
-        ]
+        "models": statuses
     }
 
 
@@ -91,14 +99,15 @@ def get_model_info(model_name: str):
     meta = registry.get_model(model_name)
     if meta is None:
         raise HTTPException(status_code=404, detail=f"Model {model_name} not found")
+    available, status, _ = registry.validate_model_file(meta.model_name, meta.model_version)
     return ModelInfo(
         model_name=meta.model_name,
         model_version=meta.model_version,
         architecture=meta.architecture,
         num_classes=meta.num_classes,
         class_names=meta.class_names,
-        training_status=meta.training_status,
-        model_path=meta.model_path if meta.model_path else None,
+        training_status=meta.training_status if available else status,
+        model_path=None,
         experiment_id=meta.experiment_id if meta.experiment_id else None,
         metrics=meta.metrics
     )

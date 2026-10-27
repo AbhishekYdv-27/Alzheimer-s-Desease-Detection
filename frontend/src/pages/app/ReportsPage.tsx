@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useAuth } from '@/context/AuthContext'
+import { useAuth } from '@/context/useAuth'
 import { analysisApi } from '@/services/api'
 import { AnalysisRecord } from '@/types'
 import { FileText, Download, Clock, Brain, AlertCircle, CheckCircle, XCircle, BarChart3 } from 'lucide-react'

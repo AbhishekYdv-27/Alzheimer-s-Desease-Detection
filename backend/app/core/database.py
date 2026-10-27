@@ -1,16 +1,29 @@
 import sqlite3
 from pathlib import Path
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
+from backend.app.core.config import settings
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-DB_PATH = PROJECT_ROOT / "data" / "app.db"
+APP_ENV = settings.app_env.strip().lower()
+configured_db_path = settings.alzheimers_db_path
+
+if APP_ENV in {"production", "prod"} and not configured_db_path:
+    raise RuntimeError("Production requires ALZHEIMERS_DB_PATH to use persistent storage")
+
+DB_PATH = Path(configured_db_path or PROJECT_ROOT / "data" / "app.db")
+if APP_ENV in {"production", "prod"} and not DB_PATH.is_absolute():
+    raise RuntimeError("Production ALZHEIMERS_DB_PATH must be an absolute path")
+if not DB_PATH.is_absolute():
+    DB_PATH = PROJECT_ROOT / DB_PATH
+DB_PATH = DB_PATH.resolve()
 
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
 
@@ -50,6 +63,17 @@ def init_db():
             availability TEXT NOT NULL DEFAULT '',
             phone TEXT NOT NULL DEFAULT '',
             FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS doctor_provisioning_audit (
+            id TEXT PRIMARY KEY,
+            doctor_id TEXT NOT NULL,
+            provisioned_by TEXT NOT NULL,
+            verification_method TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (doctor_id) REFERENCES users (id) ON DELETE CASCADE
         )
     """)
 
@@ -157,7 +181,8 @@ def init_db():
     conn.commit()
     conn.close()
 
-    create_demo_user()
+    if APP_ENV not in {"production", "prod"}:
+        create_demo_user()
 
 
 def create_demo_user():
@@ -169,7 +194,7 @@ def create_demo_user():
     cursor.execute("SELECT id FROM users WHERE email = ?", ("demo@neuroscan.ai",))
     if cursor.fetchone() is None:
         user_id = str(uuid.uuid4())
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         cursor.execute(
             "INSERT INTO users (id, name, email, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
             (user_id, "Demo User", "demo@neuroscan.ai", create_password_hash("demo123"), now, now)
@@ -209,7 +234,7 @@ def get_user_by_id(user_id: str) -> Optional[dict]:
 
 def update_user_name(user_id: str, name: str) -> Optional[dict]:
     conn = get_db()
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     conn.execute(
         "UPDATE users SET name = ?, updated_at = ? WHERE id = ?",
         (name, now, user_id),
@@ -222,7 +247,7 @@ def update_user_name(user_id: str, name: str) -> Optional[dict]:
 
 def update_user_password(user_id: str, password_hash: str) -> Optional[dict]:
     conn = get_db()
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     conn.execute(
         "UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?",
         (password_hash, now, user_id),
@@ -238,7 +263,7 @@ def create_user(name: str, email: str, password_hash: str, role: str = "patient"
     cursor = conn.cursor()
 
     user_id = str(uuid.uuid4())
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
 
     cursor.execute(
         "INSERT INTO users (id, name, email, password_hash, created_at, updated_at, role) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -273,7 +298,7 @@ def create_analysis_record(
     cursor = conn.cursor()
 
     record_id = str(uuid.uuid4())
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
 
     cursor.execute(
         """INSERT INTO analysis_records

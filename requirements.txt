@@ -12,4 +12,6 @@ opencv-python
 pyyaml
 python-multipart
 python-jose[cryptography]
-httpx2
+httpx
+torch==2.13.0
+torchvision==0.28.0

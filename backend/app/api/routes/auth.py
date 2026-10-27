@@ -11,8 +11,6 @@ security = HTTPBearer()
 
 @router.post("/register", response_model=TokenResponse)
 async def register(user_data: UserCreate):
-    if user_data.role not in {"patient", "doctor"}:
-        raise HTTPException(status_code=422, detail="Role must be patient or doctor")
     existing_user = get_user_by_email(user_data.email)
     if existing_user:
         raise HTTPException(
@@ -21,7 +19,7 @@ async def register(user_data: UserCreate):
         )
 
     password_hash = create_password_hash(user_data.password)
-    user = create_user(user_data.name, user_data.email, password_hash, user_data.role)
+    user = create_user(user_data.name, user_data.email, password_hash, "patient")
 
     access_token = create_access_token(data={"sub": user["id"]})
 

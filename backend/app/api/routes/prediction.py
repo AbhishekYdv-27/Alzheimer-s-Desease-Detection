@@ -1,19 +1,25 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, Dict, Any, List
-import tempfile
 from pathlib import Path
+import logging
 import numpy as np
 import torch
+import uuid
 from backend.app.ml.models import get_device
 from backend.app.ml.models.model_loader import ModelLoader
+from backend.app.core.auth import get_current_user
+from backend.app.core.uploads import save_validated_upload
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
 
 router = APIRouter(prefix="/api", tags=["prediction"])
+logger = logging.getLogger(__name__)
 
 
 class PredictionResponseModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     predicted_class: str
     predicted_class_index: int
     class_probabilities: Optional[Dict[str, float]] = None
@@ -26,10 +32,6 @@ class PredictionResponseModel(BaseModel):
     error_code: Optional[str] = None
     error_message: Optional[str] = None
 
-    class Config:
-        from_attributes = True
-
-
 class BatchPredictionRequest(BaseModel):
     model_name: str
     model_version: str = "1.0"
@@ -39,7 +41,8 @@ class BatchPredictionRequest(BaseModel):
 async def predict(
     file: UploadFile = File(...),
     model_name: str = Form(...),
-    model_version: str = Form("1.0")
+    model_version: str = Form("1.0"),
+    _: dict = Depends(get_current_user),
 ):
     from backend.app.ml.models.model_loader import check_model_ready
     ready, status, message = check_model_ready(model_name, model_version)
@@ -55,23 +58,7 @@ async def predict(
             error_message=message
         )
 
-    allowed_types = {"image/jpeg", "image/png", "image/bmp", "image/tiff"}
-    if file.content_type not in allowed_types:
-        return PredictionResponseModel(
-            predicted_class="",
-            predicted_class_index=-1,
-            model_name=model_name,
-            model_version=model_version,
-            explanation_available=False,
-            timestamp="",
-            error_code="INVALID_IMAGE",
-            error_message=f"Unsupported image format: {file.content_type}"
-        )
-
-    with tempfile.NamedTemporaryFile(delete=False, suffix=Path(file.filename).suffix) as tmp:
-        content = await file.read()
-        tmp.write(content)
-        tmp_path = tmp.name
+    tmp_path = await save_validated_upload(file)
 
     try:
         from backend.app.ml.inference import InferenceService, PredictionRequest
@@ -106,7 +93,8 @@ async def explain(
     file: UploadFile = File(...),
     model_name: str = Form(...),
     model_version: str = Form("1.0"),
-    target_class: Optional[int] = Form(None)
+    target_class: Optional[int] = Form(None),
+    current_user: dict = Depends(get_current_user),
 ):
     from backend.app.ml.models.model_loader import check_model_ready, ModelLoader
     from backend.app.ml.explainability import GradCAM, GradCAMResult
@@ -131,31 +119,11 @@ async def explain(
             "error_message": message
         }
 
-    allowed_types = {"image/jpeg", "image/png", "image/bmp", "image/tiff"}
-    if file.content_type not in allowed_types:
-        return {
-            "success": False,
-            "predicted_class": "",
-            "predicted_class_index": -1,
-            "confidence": 0.0,
-            "model_name": model_name,
-            "model_version": model_version,
-            "heatmap_url": None,
-            "overlay_url": None,
-            "explanation_available": False,
-            "error_code": "INVALID_IMAGE",
-            "error_message": f"Unsupported image format: {file.content_type}"
-        }
-
-    with tempfile.NamedTemporaryFile(delete=False, suffix=Path(file.filename).suffix) as tmp:
-        content = await file.read()
-        tmp.write(content)
-        tmp_path = tmp.name
-
-    results_dir = Path(PROJECT_ROOT) / "backend" / "results" / "gradcam"
-    results_dir.mkdir(parents=True, exist_ok=True)
+    tmp_path = await save_validated_upload(file)
 
     try:
+        results_dir = Path(PROJECT_ROOT) / "backend" / "results" / "gradcam"
+        results_dir.mkdir(parents=True, exist_ok=True)
         loader = ModelLoader()
         model_result = loader.load_model(model_name, model_version)
 
@@ -217,19 +185,21 @@ async def explain(
         heatmap_color = cv2.applyColorMap(heatmap_uint8, cv2.COLORMAP_JET)
         heatmap_color = cv2.cvtColor(heatmap_color, cv2.COLOR_BGR2RGB)
 
-        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        asset_prefix = f"{current_user['id']}_{uuid.uuid4().hex}"
 
-        heatmap_filename = f"heatmap_{timestamp_str}.png"
+        heatmap_filename = f"{asset_prefix}_heatmap.png"
         heatmap_filepath = results_dir / heatmap_filename
         heatmap_bgr = cv2.cvtColor(heatmap_color, cv2.COLOR_RGB2BGR)
-        cv2.imwrite(str(heatmap_filepath), heatmap_bgr)
+        if not cv2.imwrite(str(heatmap_filepath), heatmap_bgr):
+            raise RuntimeError("Failed to write Grad-CAM heatmap")
 
         overlay = cv2.addWeighted(original_image_array, 0.6, heatmap_color, 0.4, 0)
 
-        overlay_filename = f"overlay_{timestamp_str}.png"
+        overlay_filename = f"{asset_prefix}_overlay.png"
         overlay_filepath = results_dir / overlay_filename
         overlay_bgr = cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR)
-        cv2.imwrite(str(overlay_filepath), overlay_bgr)
+        if not cv2.imwrite(str(overlay_filepath), overlay_bgr):
+            raise RuntimeError("Failed to write Grad-CAM overlay")
 
         heatmap_url = f"/api/results/gradcam/{heatmap_filename}"
         overlay_url = f"/api/results/gradcam/{overlay_filename}"
@@ -251,7 +221,8 @@ async def explain(
             "error_message": None
         }
 
-    except Exception as e:
+    except Exception:
+        logger.exception("Grad-CAM generation failed")
         return {
             "success": False,
             "predicted_class": "",
@@ -263,7 +234,7 @@ async def explain(
             "overlay_url": None,
             "explanation_available": False,
             "error_code": "EXPLANATION_FAILED",
-            "error_message": f"Explanation generation failed: {str(e)}"
+            "error_message": "Explanation generation failed. Check server logs for details."
         }
     finally:
         Path(tmp_path).unlink(missing_ok=True)

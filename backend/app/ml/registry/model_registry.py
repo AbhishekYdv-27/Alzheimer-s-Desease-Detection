@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 import json
-import os
+from backend.app.core.config import settings
+from backend.app.ml.models.checkpoint_integrity import (
+    checkpoint_sha256_matches,
+    normalize_sha256,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
 
@@ -14,6 +18,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
 class ModelStatus(Enum):
     NOT_CONFIGURED = "NOT_CONFIGURED"
     NOT_TRAINED = "NOT_TRAINED"
+    UNVERIFIED = "UNVERIFIED"
     TRAINING = "TRAINING"
     TRAINED = "TRAINED"
     FAILED = "FAILED"
@@ -101,7 +106,7 @@ class ModelRegistry:
                 name: meta.to_dict()
                 for name, meta in self.models.items()
             },
-            "last_updated": datetime.now().isoformat()
+            "last_updated": datetime.now(timezone.utc).isoformat()
         }
         with open(self.registry_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2)
@@ -118,6 +123,13 @@ class ModelRegistry:
     def get_model(self, model_name: str, model_version: str = "1.0") -> Optional[ModelMetadata]:
         key = f"{model_name}_{model_version}"
         return self.models.get(key)
+
+    def resolve_model_path(self, metadata: ModelMetadata) -> Path:
+        configured_path = settings.model_checkpoint_path or metadata.model_path
+        model_path = Path(configured_path)
+        if not model_path.is_absolute():
+            model_path = PROJECT_ROOT / model_path
+        return model_path.resolve()
 
     def get_all_models(self) -> List[ModelMetadata]:
         return list(self.models.values())
@@ -151,7 +163,7 @@ class ModelRegistry:
             return False
 
         self.models[key].training_status = status.value
-        self.models[key].updated_date = datetime.now().isoformat()
+        self.models[key].updated_date = datetime.now(timezone.utc).isoformat()
 
         if metrics is not None:
             self.models[key].metrics.update(metrics)
@@ -179,15 +191,31 @@ class ModelRegistry:
         if meta is None:
             return False, "MODEL_NOT_REGISTERED", f"Model {model_name} v{model_version} not found in registry"
 
-        if meta.training_status != ModelStatus.TRAINED.value:
+        if meta.training_status not in {
+            ModelStatus.TRAINED.value,
+            ModelStatus.UNVERIFIED.value,
+        }:
             return False, "MODEL_NOT_TRAINED", f"Model {model_name} v{model_version} has status: {meta.training_status}"
 
         if not meta.model_path:
             return False, "MODEL_PATH_MISSING", f"No model path specified for {model_name} v{model_version}"
 
-        model_file = Path(meta.model_path)
-        if not model_file.exists():
-            return False, "MODEL_FILE_NOT_FOUND", f"Model file not found: {model_file}"
+        model_file = self.resolve_model_path(meta)
+        if not model_file.is_file():
+            return False, "MODEL_FILE_NOT_FOUND", "Configured model checkpoint was not found"
+
+        expected_digest = normalize_sha256(settings.model_checkpoint_sha256)
+        production = settings.app_env.strip().lower() in {"production", "prod"}
+        if settings.model_checkpoint_sha256 and expected_digest is None:
+            return False, "MODEL_CHECKSUM_INVALID", "Configured model checkpoint checksum is invalid"
+        if production and expected_digest is None:
+            return False, "MODEL_CHECKSUM_REQUIRED", "A SHA-256 checksum is required in production"
+        if expected_digest is not None:
+            try:
+                if not checkpoint_sha256_matches(model_file, expected_digest):
+                    return False, "MODEL_CHECKSUM_MISMATCH", "Model checkpoint integrity verification failed"
+            except OSError:
+                return False, "MODEL_FILE_UNREADABLE", "Configured model checkpoint cannot be read"
 
         return True, "VALID", "Model validation passed"
 
@@ -210,8 +238,8 @@ def create_default_registry() -> ModelRegistry:
         num_classes=4,
         class_names=ALZHEIMER_CLASSES.copy(),
         training_status=ModelStatus.NOT_TRAINED.value,
-        created_date=datetime.now().isoformat(),
-        updated_date=datetime.now().isoformat(),
+        created_date=datetime.now(timezone.utc).isoformat(),
+        updated_date=datetime.now(timezone.utc).isoformat(),
         config={
             "pretrained": False,
             "freeze_backbone": False,
@@ -227,8 +255,8 @@ def create_default_registry() -> ModelRegistry:
         num_classes=4,
         class_names=ALZHEIMER_CLASSES.copy(),
         training_status=ModelStatus.NOT_TRAINED.value,
-        created_date=datetime.now().isoformat(),
-        updated_date=datetime.now().isoformat(),
+        created_date=datetime.now(timezone.utc).isoformat(),
+        updated_date=datetime.now(timezone.utc).isoformat(),
         config={
             "pretrained": False,
             "embed_dim": 96,
@@ -245,8 +273,8 @@ def create_default_registry() -> ModelRegistry:
         architecture=ModelArchitecture.UNET.value,
         num_classes=1,
         training_status=ModelStatus.NOT_TRAINED.value,
-        created_date=datetime.now().isoformat(),
-        updated_date=datetime.now().isoformat(),
+        created_date=datetime.now(timezone.utc).isoformat(),
+        updated_date=datetime.now(timezone.utc).isoformat(),
         config={
             "in_channels": 3,
             "out_channels": 1,

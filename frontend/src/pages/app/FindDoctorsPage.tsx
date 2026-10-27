@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { portalApi } from '@/services/api'
 import { Search, MapPin, Calendar, Clock, X } from 'lucide-react'
 
@@ -17,8 +17,9 @@ export default function FindDoctorsPage() {
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
 
-  const load = async () => { setLoading(true); try { setDoctors(await portalApi.doctors(city, specialization)) } catch (e) { setMessage(e instanceof Error ? e.message : 'Unable to load doctors') } finally { setLoading(false) } }
-  useEffect(() => { load() }, [])
+  const load = useCallback(async () => { setLoading(true); try { setDoctors(await portalApi.doctors(city, specialization)) } catch (e) { setMessage(e instanceof Error ? e.message : 'Unable to load doctors') } finally { setLoading(false) } }, [city, specialization])
+
+  useEffect(() => { load() }, [load])
   const openBooking = async (doctor: Doctor) => { setSelected(doctor); setDate(''); setSlotId(''); setSlots([]); try { setSlots(await portalApi.availability(doctor.id)) } catch { setMessage('Unable to load availability') } }
   const selectDate = async (value: string) => { setDate(value); setSlotId(''); if (selected && value) setSlots(await portalApi.availability(selected.id, value)) }
   const book = async () => { const slot = slots.find(item => item.id === slotId); if (!selected || !slot) return; try { await portalApi.bookAppointment(selected.id, slot.slot_at, reason, slotId); setMessage('Appointment request submitted'); setSelected(null); setReason(''); setSlotId('') } catch (e) { setMessage(e instanceof Error ? e.message : 'Unable to book appointment') } }

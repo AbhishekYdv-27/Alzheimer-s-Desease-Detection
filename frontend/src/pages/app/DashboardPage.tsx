@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useAuth } from '@/context/AuthContext'
+import { useAuth } from '@/context/useAuth'
 import { modelsApi, analysisApi, portalApi } from '@/services/api'
 import { ModelInfo } from '@/types'
 import { Box, Brain, Database, Scan, AlertCircle, Clock } from 'lucide-react'
@@ -20,8 +20,14 @@ export default function DashboardPage() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const modelsData = await modelsApi.getAll()
-        setModels(modelsData)
+        const [modelsData, statusData] = await Promise.all([
+          modelsApi.getAll(),
+          modelsApi.getStatus(),
+        ])
+        const availableNames = new Set(
+          statusData.models.filter((model) => model.available).map((model) => model.model_name),
+        )
+        setModels(modelsData.filter((model) => availableNames.has(model.model_name)))
 
         if (user?.id) {
           const statsData = await analysisApi.getStats(user.id)
@@ -37,8 +43,6 @@ export default function DashboardPage() {
     }
     loadData()
   }, [user?.id])
-
-  const trainedModels = models.filter((m) => m.training_status === 'TRAINED')
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -68,7 +72,7 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-muted-foreground">Models Available</p>
-              <p className="mt-1 text-2xl font-bold">{trainedModels.length}</p>
+              <p className="mt-1 text-2xl font-bold">{models.length}</p>
             </div>
             <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
               <Brain className="h-6 w-6 text-primary" />
@@ -91,8 +95,8 @@ export default function DashboardPage() {
         <div className="rounded-xl border border-border/40 bg-card p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-muted-foreground">Dataset Status</p>
-              <p className="mt-1 text-sm font-bold text-green-600">Connected</p>
+              <p className="text-sm text-muted-foreground">MRI Dataset</p>
+              <p className="mt-1 text-sm font-bold">Not bundled</p>
             </div>
             <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-orange-500/10">
               <Database className="h-6 w-6 text-orange-500" />
@@ -121,16 +125,16 @@ export default function DashboardPage() {
             <Clock className="h-4 w-4 animate-spin" />
             Loading model status...
           </div>
-        ) : trainedModels.length === 0 ? (
+        ) : models.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <AlertCircle className="h-8 w-8 text-muted-foreground" />
             <p className="mt-2 text-sm text-muted-foreground">
-              No trained models available
+              No inference-ready models available
             </p>
           </div>
         ) : (
           <div className="mt-6 space-y-4">
-            {trainedModels.map((model) => (
+            {models.map((model) => (
               <div
                 key={model.model_name}
                 className="flex items-center justify-between rounded-lg border border-border/40 bg-secondary/30 p-4"
@@ -203,8 +207,8 @@ export default function DashboardPage() {
       <div className="rounded-lg border border-orange-500/30 bg-orange-500/10 p-4">
         <p className="text-xs text-orange-600 dark:text-orange-400">
           <strong>Research Disclaimer:</strong> This platform is for educational and
-          research purposes only. Predictions are made by trained AI models but should not
-          replace professional medical diagnosis.
+          research purposes only. Predictions from configured model checkpoints have not
+          been clinically validated and must not replace professional medical advice.
         </p>
       </div>
     </div>

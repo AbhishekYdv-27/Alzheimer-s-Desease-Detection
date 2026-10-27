@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useAuth } from '@/context/AuthContext'
+import { useAuth } from '@/context/useAuth'
 import { Eye, EyeOff, Loader2, Brain } from 'lucide-react'
 
 export default function SignupPage() {
@@ -8,7 +8,6 @@ export default function SignupPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [role, setRole] = useState<'patient' | 'doctor'>('patient')
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
@@ -32,8 +31,8 @@ export default function SignupPage() {
     setIsLoading(true)
 
     try {
-      const registeredUser = await register(name, email, password, role)
-      navigate(registeredUser.role === 'doctor' ? '/doctor' : '/dashboard')
+      await register(name, email, password)
+      navigate('/dashboard')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed')
     } finally {
@@ -66,18 +65,10 @@ export default function SignupPage() {
           )}
 
           <div className="space-y-4">
-            <div>
-              <label htmlFor="role" className="block text-sm font-medium">Account Type</label>
-              <select id="role" value={role} onChange={(e) => setRole(e.target.value as 'patient' | 'doctor')} className="mt-1 block w-full rounded-lg border border-border/40 bg-background px-4 py-2.5 text-sm">
-                <option value="patient">Patient</option>
-                <option value="doctor">Doctor</option>
-              </select>
-              <p className="mt-2 text-xs text-muted-foreground">
-                {role === 'patient'
-                  ? 'Patient accounts can run MRI research analysis, find doctors, and manage appointments.'
-                  : 'Doctor accounts can manage a professional profile, appointments, authorized patients, and notes.'}
-              </p>
-            </div>
+            <p className="rounded-lg border border-border/40 bg-secondary/40 p-3 text-sm text-muted-foreground">
+              New accounts have patient access. Physician access is provisioned by
+              authorized staff after professional credentials are reviewed.
+            </p>
             <div>
               <label htmlFor="name" className="block text-sm font-medium">
                 Full Name
@@ -89,7 +80,7 @@ export default function SignupPage() {
                 onChange={(e) => setName(e.target.value)}
                 required
                 className="mt-1 block w-full rounded-lg border border-border/40 bg-background px-4 py-2.5 text-sm placeholder:text-muted-foreground focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20"
-                placeholder="Dr. Jane Smith"
+                placeholder="Your full name"
               />
             </div>
 

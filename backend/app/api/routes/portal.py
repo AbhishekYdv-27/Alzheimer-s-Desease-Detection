@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -55,7 +55,7 @@ def create_notification(conn, user_id: str, notification_type: str, title: str, 
     conn.execute("""INSERT INTO notifications
         (id, user_id, notification_type, title, message, entity_id, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)""", (str(uuid.uuid4()), user_id, notification_type,
-        title, message, entity_id, datetime.utcnow().isoformat()))
+        title, message, entity_id, datetime.now(timezone.utc).isoformat()))
 
 
 def profile_dict(row):
@@ -100,7 +100,7 @@ async def doctor_availability(doctor_id: str, date: str = Query(default="")):
                FROM availability_slots s LEFT JOIN appointments a
                  ON a.slot_id = s.id AND a.status IN ('pending', 'approved')
                WHERE s.doctor_id = ? AND s.slot_at >= ?"""
-    params = [doctor_id, datetime.utcnow().isoformat()]
+    params = [doctor_id, datetime.now(timezone.utc).isoformat()]
     if date:
         query += " AND substr(s.slot_at, 1, 10) = ?"
         params.append(date)
@@ -127,7 +127,7 @@ async def create_availability(data: AvailabilityInput, doctor: dict = Depends(re
         slot_id = str(uuid.uuid4())
         cursor = conn.execute("""INSERT OR IGNORE INTO availability_slots
             (id, doctor_id, slot_at, duration_minutes, created_at) VALUES (?, ?, ?, ?, ?)""",
-            (slot_id, doctor["id"], slot_at, data.interval_minutes, datetime.utcnow().isoformat()))
+            (slot_id, doctor["id"], slot_at, data.interval_minutes, datetime.now(timezone.utc).isoformat()))
         if cursor.rowcount:
             created.append({"id": slot_id, "slot_at": slot_at, "duration_minutes": data.interval_minutes})
         current += timedelta(minutes=data.interval_minutes)
@@ -182,7 +182,7 @@ async def create_appointment(data: AppointmentInput, patient: dict = Depends(req
         raise HTTPException(status_code=409, detail="That appointment time is already requested")
     appointment_id = str(uuid.uuid4())
     conn.execute("""INSERT INTO appointments (id, patient_id, doctor_id, appointment_at, slot_id, reason, status, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)""", (appointment_id, patient["id"], data.doctor_id, data.appointment_at, data.slot_id, data.reason, datetime.utcnow().isoformat()))
+                   VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)""", (appointment_id, patient["id"], data.doctor_id, data.appointment_at, data.slot_id, data.reason, datetime.now(timezone.utc).isoformat()))
     create_notification(conn, data.doctor_id, "appointment_request", "New appointment request",
                         f"{patient['name']} requested an appointment for {data.appointment_at}.", appointment_id)
     conn.commit()
@@ -247,7 +247,7 @@ async def create_note(data: NoteInput, doctor: dict = Depends(require_role("doct
         raise HTTPException(status_code=403, detail="A completed or approved appointment is required")
     note_id = str(uuid.uuid4())
     conn.execute("""INSERT INTO doctor_notes (id, doctor_id, patient_id, appointment_id, note_type, content, follow_up, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""", (note_id, doctor["id"], data.patient_id, data.appointment_id, data.note_type, data.content, data.follow_up, datetime.utcnow().isoformat()))
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""", (note_id, doctor["id"], data.patient_id, data.appointment_id, data.note_type, data.content, data.follow_up, datetime.now(timezone.utc).isoformat()))
     create_notification(conn, data.patient_id, "doctor_note", "New doctor note",
                         f"Dr. {doctor['name']} added a note to your care record.", note_id)
     conn.commit()
@@ -268,7 +268,7 @@ async def notifications(user: dict = Depends(get_current_user)):
 async def mark_notification_read(notification_id: str, user: dict = Depends(get_current_user)):
     conn = get_db()
     cursor = conn.execute("UPDATE notifications SET read_at = ? WHERE id = ? AND user_id = ?",
-                          (datetime.utcnow().isoformat(), notification_id, user["id"]))
+                          (datetime.now(timezone.utc).isoformat(), notification_id, user["id"]))
     conn.commit()
     conn.close()
     if cursor.rowcount == 0:

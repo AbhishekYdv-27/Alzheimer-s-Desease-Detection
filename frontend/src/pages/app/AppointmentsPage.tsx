@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { CalendarDays, Check, Clock3, X, RefreshCw } from 'lucide-react'
-import { useAuth } from '@/context/AuthContext'
+import { useAuth } from '@/context/useAuth'
 import { portalApi } from '@/services/api'
 
 type Appointment = { id: string; appointment_at: string; reason: string; status: string; patient_name?: string; doctor_name?: string }
@@ -24,15 +24,15 @@ export default function AppointmentsPage() {
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState('')
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true)
     setError('')
     try { setItems(user?.role === 'doctor' ? await portalApi.doctorAppointments() : await portalApi.myAppointments()) }
     catch (e) { setError(e instanceof Error ? e.message : 'We could not load appointments. Please try again.') }
     finally { setLoading(false) }
-  }
+  }, [user?.role])
 
-  useEffect(() => { load() }, [user?.role])
+  useEffect(() => { load() }, [load])
 
   const update = async (id: string, status: string) => {
     setUpdating(id)

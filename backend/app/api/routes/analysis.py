@@ -1,21 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
-from datetime import datetime
-import sqlite3
+from datetime import datetime, timezone
 import json
 from backend.app.core.auth import get_current_user
-from pathlib import Path
+from backend.app.core.database import get_db
 
 router = APIRouter(prefix="/api/analysis", tags=["analysis"])
-
-DATABASE_PATH = Path(__file__).resolve().parent.parent.parent.parent.parent / "data" / "app.db"
-
-
-def get_db():
-    conn = sqlite3.connect(str(DATABASE_PATH))
-    conn.row_factory = sqlite3.Row
-    return conn
 
 
 def can_access_patient(conn, current_user: dict, patient_id: str) -> bool:
@@ -41,6 +32,8 @@ class AnalysisRecordCreate(BaseModel):
 
 
 class AnalysisRecord(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     user_id: str
     image_name: str
@@ -52,10 +45,6 @@ class AnalysisRecord(BaseModel):
     model_version: str = "1.0"
     class_probabilities: Optional[dict[str, float]] = None
     explanation_available: bool = False
-
-    class Config:
-        from_attributes = True
-
 
 @router.post("/records", response_model=AnalysisRecord)
 async def create_analysis_record(record: AnalysisRecordCreate, current_user: dict = Depends(get_current_user)):
@@ -69,7 +58,7 @@ async def create_analysis_record(record: AnalysisRecordCreate, current_user: dic
         raise HTTPException(status_code=403, detail="You are not authorized to save analysis for this patient")
     
     record_id = str(uuid.uuid4())
-    created_at = datetime.now().isoformat()
+    created_at = datetime.now(timezone.utc).isoformat()
     
     try:
         cursor.execute("""

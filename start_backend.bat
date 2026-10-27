@@ -1,3 +1,4 @@
 @echo off
-cd /d "C:\Users\abhis\OneDrive\Desktop\CODING\COLLEGE PROJECT\Alzheimer's Desease Detection"
-uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
+cd /d "%~dp0"
+if exist ".venv\Scripts\activate.bat" call ".venv\Scripts\activate.bat"
+python run_backend.py

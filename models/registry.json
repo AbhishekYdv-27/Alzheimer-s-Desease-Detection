@@ -11,16 +11,13 @@
         "MildDemented",
         "ModerateDemented"
       ],
-      "model_path": "C:\\Users\\abhis\\OneDrive\\Desktop\\CODING\\COLLEGE PROJECT\\Alzheimer's Desease Detection\\backend\\models\\resnet50_best.pth",
-      "training_status": "TRAINED",
-      "experiment_id": "resnet50_colab_2024",
-      "created_date": "2024-01-15T00:00:00",
-      "updated_date": "2024-01-15T00:00:00",
-      "metrics": {
-        "test_accuracy": 95.52,
-        "val_accuracy": 94.8
-      },
-      "notes": "Trained on Google Colab with PyTorch. Test accuracy: 95.52%",
+      "model_path": "backend/models/resnet50_best.pth",
+      "training_status": "UNVERIFIED",
+      "experiment_id": "",
+      "created_date": "",
+      "updated_date": "",
+      "metrics": {},
+      "notes": "Checkpoint provenance and evaluation metrics have not been independently verified.",
       "config": {
         "pretrained": false,
         "freeze_backbone": false,
